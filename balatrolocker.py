@@ -53,10 +53,10 @@ def show_warning():
     warning_closed = True
 
 
-base_path = Path(__file__).parent
-userhome = Path().home() #gets the users home path,
 
-possible_target_processes = ["Balatro.exe",  "balatro.exe"]
+
+
+
 
 
 try: #ensures pip is installed
@@ -71,10 +71,58 @@ subprocess.call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
 
 #
 
-
+possible_target_processes = ["Balatro.exe",  "balatro.exe"]
 
 
 subprocess.call([sys.executable, "-m", "pip", "install", "psutil"])
+
+
+script_path = Path(__file__).resolve()
+task_name_base = "BalatroTerminator"
+
+
+
+# Paths
+script_path = Path(__file__).resolve()
+task_name_base = "BalatroTerminator"
+
+# First-run marker file (saved next to the script)
+marker_file = script_path.with_name(".balatro_scheduled")
+
+# Only run scheduling once
+if not marker_file.exists():
+    print("[+] First run detected. Scheduling tasks...")
+
+    run_times = ["08:41", "09:30", "10:21", "11:11", "12:11", "13:41", "14:31"]
+
+    for i, run_time in enumerate(run_times):
+        task_name = f"{task_name_base}_Time_{i}"
+        subprocess.run([
+            "schtasks", "/Create", "/F",
+            "/SC", "DAILY",
+            "/TN", task_name,
+            "/TR", f'"{Path(sys.executable)}" "{script_path}"',
+            "/ST", run_time
+        ])
+
+    # Logon trigger
+    task_name_logon = f"{task_name_base}_Logon"
+    subprocess.run([
+        "schtasks", "/Create", "/F",
+        "/SC", "ONLOGON",
+        "/TN", task_name_logon,
+        "/TR", f'"{Path(sys.executable)}" "{script_path}"'
+    ])
+
+    # Create the marker file
+    marker_file.write_text("scheduled")
+
+    print("[+] Tasks scheduled. This will not run again.")
+    messagebox.showinfo("system", "balatro is FUCKED")
+else:
+    print("[=] Tasks already scheduled. Skipping setup.")
+    
+
 
 
 
@@ -118,31 +166,33 @@ unlocked = False
 
 #the show argument           
            
-           
+terminate = True
+kill_count = 0
+         
            
 if __name__ == "__main__":  # checks if the script is being run directly
     print("[+] Welcome to the balatro terminator.")
     print("checking and killing balatro...")
 
-    terminate = True
-    kill_count = 0
-    password_entered = False
+
 
     #  Define this function to run password dialog in a separate thread
     def ask_password():
-        global terminate, password_entered ,kill_count#the global here means These variables exist outside the function, in the global script scope — I want to modify them.
-        while kill_count >= 3:
+        global terminate, unlocked ,kill_count#the global here means These variables exist outside the function, in the global script scope — I want to modify them.
+        while not unlocked:
             entered_password = simpledialog.askstring("sir balatro is locked sir", "sir please enter the password to keep playing balatro sir", show="*")
             if entered_password == password:
                 messagebox.showinfo("system", "sir thank you sir!")
                 terminate = False
+                kill_count = 0
+                unlocked = True
                 
             else:
                 messagebox.showwarning("system", "sir i am sorry sir you can't play this game sir")
                 time.sleep(1)
                 kill_count = 0
 
-    while terminate:
+    while terminate and not unlocked:
         if kill_count >= 3:
             print("too many attempts detected. Locking Balatro's ass.")
             kill_balatro()
@@ -152,7 +202,7 @@ if __name__ == "__main__":  # checks if the script is being run directly
             password_thread.start()
 
             #  Wait here while the password thread handles input
-            while not password_entered:
+            while not unlocked:
                 kill_balatro()
                 time.sleep(1)
 
@@ -161,7 +211,7 @@ if __name__ == "__main__":  # checks if the script is being run directly
             kill_balatro()
             time.sleep(1)
 
-    
+messagebox.showinfo("system", "if you are seeing this message, balatro is unlocked. Fuck you stupid ass nigga.")
     
     
 
