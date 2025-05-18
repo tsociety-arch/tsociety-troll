@@ -211,7 +211,7 @@ if __name__ == "__main__":  # checks if the script is being run directly
             kill_balatro()
             time.sleep(1)
 
-messagebox.showinfo("system", "if you are seeing this message, balatro is unlocked. Fuck you stupid ass nigga.")
+messagebox.showinfo("system", "if you are seeing this message, balatro is unlocked.")
     
     
 
