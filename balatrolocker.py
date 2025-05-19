@@ -33,13 +33,14 @@ if not is_admin():
 #and runs it as an administrator if its not
 
 
+#now i will prevent them from renaming balatro using watchdog
 
 
 
-
-
-
-
+try: #ensures pip is installed
+    import pip
+except ImportError:
+    ensurepip.bootstrap() #adds pip to current python
 
  
  
@@ -53,16 +54,116 @@ def show_warning():
     warning_closed = True
 
 
+subprocess.call([sys.executable, "-m", "pip", "install", "watchdog"])
+
+subprocess.call([sys.executable, "-m", "pip", "install", "pywin32"])
+
+from watchdog.observers import Observer         # Watches for changes in the file system
+from watchdog.events import FileSystemEventHandler  # Lets us define what to do when something happens
+
+#configuration part
+
+userhome = Path().home()
+download_path = userhome / 'Downloads'
+balatro_path = userhome / 'Downloads' / 'baltro' / 'Balatro.v1.0.1o' / 'Balatro.v1.0.1o' / 'balatro.exe'
+balatro_dir = balatro_path.parent
+balatro_name = "balatro.exe"
 
 
+def make_directory_read_only(path: Path):
+    for file in path.rglob("*"):
+        if file.is_file():
+            try:
+                os.chmod(file, 0o444)  # read-only for all
+            except Exception as e:
+                print(f"Failed to set read-only: {file} - {e}")
+
+make_directory_read_only(balatro_dir)
+subprocess.call(["icacls", str(balatro_dir), "/deny", f"{os.getlogin()}:W"])
 
 
+#step one : lets make the file read only
 
 
-try: #ensures pip is installed
-    import pip
-except ImportError:
-    ensurepip.bootstrap() #adds pip to current python
+def make_read_only(path: Path):
+    if path.exists():
+        os.chmod(path, 0o444) #we changed its property. # 0o444 = read-only for everyone
+    else:
+        messagebox.showinfo("system", "balatro is not in its normal path")    
+        
+        
+def warn_user(message): #warns user with the desired message
+    ctypes.windll.user32.MessageBoxW(0, message, "System Warning", 0x10)  # 0x10 = MB_ICONHAND (red X)
+
+#define the event handler
+
+class BalatroWatcher(FileSystemEventHandler): #this is the windows module that handles events, we'll use it
+    
+    """
+    This class inherits from FileSystemEventHandler and defines how we react when files change.
+    `on_moved` and `on_deleted` are special methods that get called automatically when a file moves or is deleted.
+    """
+    
+    def on_moved(self, event):
+        self.check_for_rename()
+
+    def on_deleted(self, event):
+        self.check_for_rename()
+
+    def check_for_rename(self):
+        """
+        This method checks if Balatro.exe is missing. If so, it searches the folder
+        for a suspicious renamed .exe and tries to fix it.
+        """
+        if not balatro_path.exists():
+            print("[!] Balatro.exe is missing!")
+           
+
+            # Scan the folder for other suspicious .exe files
+            for file in balatro_dir.glob("*.exe"):
+                if file.name != balatro_name:
+                    try:
+                        print(f"[!] Found renamed version: {file.name}")
+                        file.rename(balatro_path)
+                        make_read_only(balatro_path) #used the func we defined
+                        def threaded_warning():
+                            warn_user("Sir, PLEASE don't rename the file. It's forbidden.")
+                            warn_user(f"{file.name} has been renamed back to Balatro.exe. Please don't touch it again.")
+                            messagebox.askyesno("system", "Are you sure you want to proceed with this behavior?")
+
+                        threading.Thread(target=threaded_warning).start()
+    
+                        break
+                    except Exception as e:
+                        print(f"[!] Failed to rename: {e}")
+                        warn_user("Failed to fix the rename. You'll be edged.")
+                        break
+                for file in balatro_dir.rglob("*"):
+                    if file.is_file() and not file.name.startswith("balatro") and ".exe" in file.suffix:
+                        warn_user(f"Suspicious file found: {file.name}. Do not rename Balatro files.")
+            
+
+
+# === 4. START WATCHING ===
+def start_monitoring():
+    """
+    This sets up the folder monitoring using watchdog.
+    We create an Observer, attach our custom handler to it, and start watching.
+    """
+    observer = Observer()
+    handler = BalatroWatcher()  # Instance of our custom class
+    observer.schedule(handler, path=str(balatro_dir), recursive=True)
+    observer.start()
+    print("[+] Started watching Balatro folder...")
+
+    try:
+        while True:
+            time.sleep(1)  # Keeps the script alive
+    except KeyboardInterrupt:
+        observer.stop()   # Let user stop with Ctrl+C
+
+    observer.join()       # Wait for the observer to finish
+    
 
 
 
@@ -118,7 +219,7 @@ if not marker_file.exists():
     marker_file.write_text("scheduled")
 
     print("[+] Tasks scheduled. This will not run again.")
-    messagebox.showinfo("system", "balatro is FUCKED")
+   
 else:
     print("[=] Tasks already scheduled. Skipping setup.")
     
@@ -146,7 +247,9 @@ def kill_balatro():
                 
                      while not warning_closed:
                          proc.kill()
-                         time.sleep(2)                     
+                         time.sleep(2)   
+                         warning_closed = False  # reset after some time
+                  
                      
                                          
                  except Exception as e:
@@ -170,9 +273,13 @@ terminate = True
 kill_count = 0
          
            
-if __name__ == "__main__":  # checks if the script is being run directly
+if __name__ == "__main__":
     print("[+] Welcome to the balatro terminator.")
     print("checking and killing balatro...")
+
+    # Start the BalatroWatcher in a separate thread
+    monitor_thread = threading.Thread(target=start_monitoring, daemon=True)
+    monitor_thread.start()
 
 
 
